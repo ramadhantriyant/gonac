@@ -7,7 +7,6 @@ type handler struct {
 }
 
 var (
-	ok                  = map[string]string{"message": "ok"}
 	created             = map[string]string{"message": "created"}
 	badRequest          = map[string]string{"message": "bad request"}
 	unauthorized        = map[string]string{"message": "unauthorized"}

@@ -23,7 +23,7 @@ func (h *handler) UpsertDevice(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, internalServerError)
 	}
 
-	agentID, _ := c.Get("agent_id").(string)
+	agentID := c.Get("agent_id").(string)
 	status := "KNOWN"
 	if !d.IsKnown {
 		status = "UNKNOWN"

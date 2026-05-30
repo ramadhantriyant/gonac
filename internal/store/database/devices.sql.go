@@ -8,8 +8,29 @@ package database
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/google/uuid"
 )
+
+const getDeviceByID = `-- name: GetDeviceByID :one
+SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
+FROM devices
+WHERE id = $1
+`
+
+func (q *Queries) GetDeviceByID(ctx context.Context, id uuid.UUID) (Device, error) {
+	row := q.db.QueryRow(ctx, getDeviceByID, id)
+	var i Device
+	err := row.Scan(
+		&i.ID,
+		&i.MacAddress,
+		&i.IpAddress,
+		&i.Hostname,
+		&i.FirstSeen,
+		&i.LastSeen,
+		&i.IsKnown,
+	)
+	return i, err
+}
 
 const getDeviceByMAC = `-- name: GetDeviceByMAC :one
 SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
@@ -135,14 +156,19 @@ RETURNING id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
 `
 
 type UpsertDeviceParams struct {
-	ID         pgtype.UUID `json:"id"`
-	MacAddress string      `json:"mac_address"`
-	IpAddress  string      `json:"ip_address"`
-	Hostname   *string     `json:"hostname"`
+	ID         uuid.UUID `json:"id"`
+	MacAddress string    `json:"mac_address"`
+	IpAddress  string    `json:"ip_address"`
+	Hostname   *string   `json:"hostname"`
 }
 
 func (q *Queries) UpsertDevice(ctx context.Context, arg UpsertDeviceParams) (Device, error) {
-	row := q.db.QueryRow(ctx, upsertDevice, arg.ID, arg.MacAddress, arg.IpAddress, arg.Hostname)
+	row := q.db.QueryRow(ctx, upsertDevice,
+		arg.ID,
+		arg.MacAddress,
+		arg.IpAddress,
+		arg.Hostname,
+	)
 	var i Device
 	err := row.Scan(
 		&i.ID,

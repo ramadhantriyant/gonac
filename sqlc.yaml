@@ -8,6 +8,18 @@ sql:
         package: "database"
         out: "internal/store/database"
         sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            nullable: false
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+          - db_type: "timestamptz"
+            go_type:
+              import: "time"
+              type: "Time"
+        rename:
+          id: "ID"
         emit_json_tags: true
         emit_empty_slices: true
         emit_pointers_for_null_types: true

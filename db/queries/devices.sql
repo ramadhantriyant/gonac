@@ -24,6 +24,11 @@ SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
 FROM devices
 WHERE mac_address = $1;
 
+-- name: GetDeviceByID :one
+SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
+FROM devices
+WHERE id = $1;
+
 -- name: MarkDeviceKnown :one
 UPDATE devices
 SET is_known = TRUE

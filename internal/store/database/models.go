@@ -5,15 +5,17 @@
 package database
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 type Device struct {
-	ID         pgtype.UUID        `json:"id"`
-	MacAddress string             `json:"mac_address"`
-	IpAddress  string             `json:"ip_address"`
-	Hostname   *string            `json:"hostname"`
-	FirstSeen  pgtype.Timestamptz `json:"first_seen"`
-	LastSeen   pgtype.Timestamptz `json:"last_seen"`
-	IsKnown    bool               `json:"is_known"`
+	ID         uuid.UUID `json:"id"`
+	MacAddress string    `json:"mac_address"`
+	IpAddress  string    `json:"ip_address"`
+	Hostname   *string   `json:"hostname"`
+	FirstSeen  time.Time `json:"first_seen"`
+	LastSeen   time.Time `json:"last_seen"`
+	IsKnown    bool      `json:"is_known"`
 }

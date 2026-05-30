@@ -24,7 +24,17 @@ func NewAdminRouter(s *store.Store) *echo.Echo {
 	h := handler.NewHandler(s)
 
 	api := r.Group("/api")
-	api.GET("/devices", h.ListDevices)
+	{
+		d := api.Group("/devices")
+		{
+			d.GET("", h.ListDevices)
+			d.GET("/id/:id", h.GetDeviceByID)
+			d.GET("/mac/:mac", h.GetDeviceByMAC)
+
+			d.PUT("/id/:id/known", h.MarkAsKnown)
+			d.PUT("/mac/:mac/known", h.MarkAsKnownByMAC)
+		}
+	}
 
 	return r
 }

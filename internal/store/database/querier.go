@@ -6,9 +6,12 @@ package database
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 type Querier interface {
+	GetDeviceByID(ctx context.Context, id uuid.UUID) (Device, error)
 	GetDeviceByMAC(ctx context.Context, macAddress string) (Device, error)
 	ListDevices(ctx context.Context) ([]Device, error)
 	ListUnknownDevices(ctx context.Context) ([]Device, error)
