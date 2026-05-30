@@ -1,0 +1,15 @@
+network:
+  interface: en0
+  subnet_cidr: 192.168.1.0/24
+
+discovery:
+  scan_interval: 30
+
+agent:
+  id: home-agent-01
+  control_address: https://192.168.1.1:8443
+
+tls:
+  cert: certs/agent-home-agent-01.crt
+  key: certs/agent-home-agent-01.key
+  ca: certs/ca.crt

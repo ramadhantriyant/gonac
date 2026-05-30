@@ -1,0 +1,5 @@
+certs/
+dist/
+.env
+config-agent.yaml
+config-control.yaml

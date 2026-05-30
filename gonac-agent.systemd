@@ -1,0 +1,27 @@
+[Unit]
+Description=gonac agent — ARP network scanner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/gonac-agent
+WorkingDirectory=/etc/gonac
+
+Restart=on-failure
+RestartSec=5s
+
+# Raw packet access for ARP scanning and injection.
+# Option A (simple): run as root
+User=root
+
+# Option B (hardened): dedicated user with only the required capabilities.
+# Create the user first: useradd -r -s /sbin/nologin gonac
+# Then comment out User=root above and uncomment these:
+#User=gonac
+#AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+#CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+#NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+database_url: postgres://gonac:yourpassword@localhost:5432/gonac
+
+control:
+  listen_address: :8443
+
+admin:
+  listen_address: :9090
+
+tls:
+  cert: certs/control.crt
+  key: certs/control.key
+  ca: certs/ca.crt

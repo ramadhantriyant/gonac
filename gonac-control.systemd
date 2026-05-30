@@ -1,0 +1,23 @@
+[Unit]
+Description=gonac control plane — device registry
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=gonac
+ExecStart=/usr/local/bin/gonac-control
+WorkingDirectory=/etc/gonac
+
+Restart=on-failure
+RestartSec=5s
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

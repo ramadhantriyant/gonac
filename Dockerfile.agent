@@ -1,0 +1,39 @@
+# syntax=docker/dockerfile:1
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS build
+
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+ARG TARGETVARIANT
+
+# Enable multiarch so apt can install libpcap headers for target architectures.
+RUN dpkg --add-architecture arm64 \
+ && dpkg --add-architecture armhf \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+        gcc-aarch64-linux-gnu \
+        gcc-arm-linux-gnueabihf \
+        libpcap-dev \
+        libpcap-dev:arm64 \
+        libpcap-dev:armhf \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# Pick the right cross-compiler and GOARM for the target.
+RUN set -ex; \
+    case "${TARGETARCH}${TARGETVARIANT}" in \
+        amd64)  CC=gcc                     ;; \
+        arm64)  CC=aarch64-linux-gnu-gcc   ;; \
+        armv7)  CC=arm-linux-gnueabihf-gcc; export GOARM=7 ;; \
+        armv6)  CC=arm-linux-gnueabihf-gcc; export GOARM=6 ;; \
+        *) echo "unsupported target: ${TARGETARCH}${TARGETVARIANT}" && exit 1 ;; \
+    esac; \
+    CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} CC=${CC} \
+    go build -o /out/gonac-agent ./cmd/agent
+
+FROM scratch
+COPY --from=build /out/gonac-agent /gonac-agent
