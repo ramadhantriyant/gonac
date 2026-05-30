@@ -196,11 +196,7 @@ CREATE TABLE devices (
 );
 ```
 
-Devices are keyed by MAC address. IP address is updated on each discovery — DHCP reassignments are handled automatically. Mark a device as trusted:
-
-```sql
-UPDATE devices SET is_known = TRUE WHERE mac_address = 'aa:bb:cc:dd:ee:ff';
-```
+Devices are keyed by MAC address. IP address is updated on each discovery — DHCP reassignments are handled automatically. `is_known` is never overwritten by discovery, so trusted devices stay trusted.
 
 ## HTTP API
 
@@ -214,15 +210,27 @@ Request body:
 ```json
 {
   "mac_address": "aa:bb:cc:dd:ee:ff",
-  "ip_address": "192.168.1.42"
+  "ip_address": "192.168.1.42",
+  "hostname": "my-laptop.local"
 }
 ```
+
+`hostname` is optional — omitted when the agent cannot resolve one.
 
 ### Admin server — `:9090` (plain HTTP)
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/devices` | List all discovered devices |
+| `GET` | `/api/devices/id/:id` | Get device by UUID |
+| `GET` | `/api/devices/mac/:mac` | Get device by MAC address |
+| `PUT` | `/api/devices/id/:id/known` | Mark device as trusted by UUID |
+| `PUT` | `/api/devices/mac/:mac/known` | Mark device as trusted by MAC address |
+
+Example — mark a device as trusted:
+```sh
+curl -X PUT http://localhost:9090/api/devices/mac/aa:bb:cc:dd:ee:ff/known
+```
 
 ## Privilege Note
 
