@@ -2,13 +2,17 @@ package router
 
 import (
 	"crypto/x509"
+	"io/fs"
+	"log"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/ramadhantriyant/gonac/internal/handler"
 	"github.com/ramadhantriyant/gonac/internal/store"
+	webui "github.com/ramadhantriyant/gonac/internal/ui"
 )
 
 func NewRouter(s *store.Store) *echo.Echo {
@@ -39,7 +43,32 @@ func NewAdminRouter(s *store.Store) *echo.Echo {
 		}
 	}
 
+	sub, err := fs.Sub(webui.FS, "dist")
+	if err != nil {
+		log.Fatalf("error finding built ui: %v", err)
+	}
+	r.GET("/*", spaHandler(sub))
+	r.GET("/", spaHandler(sub))
+
 	return r
+}
+
+func spaHandler(fsys fs.FS) echo.HandlerFunc {
+	srv := http.FileServer(http.FS(fsys))
+	index, err := fs.ReadFile(fsys, "index.html")
+	if err != nil {
+		log.Fatalf("ui: index.html not found in embedded FS: %v", err)
+	}
+	return func(c *echo.Context) error {
+		path := strings.TrimPrefix(c.Request().URL.Path, "/")
+		if path != "" {
+			if stat, err := fs.Stat(fsys, path); err == nil && !stat.IsDir() {
+				srv.ServeHTTP(c.Response(), c.Request())
+				return nil
+			}
+		}
+		return c.HTMLBlob(http.StatusOK, index)
+	}
 }
 
 // mtlsMiddleware verifies that the client certificate CN matches the

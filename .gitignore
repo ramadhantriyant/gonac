@@ -1,5 +1,6 @@
 certs/
 dist/
+internal/ui/dist/
 .env
 config-agent.yaml
 config-control.yaml
