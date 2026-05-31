@@ -32,7 +32,7 @@ func main() {
 	}
 	go client.Start(ctx)
 
-	snif, err := sniffer.New(cfg.InterfaceName, cfg.SubnetCIDR, cfg.ScanInterval)
+	snif, err := sniffer.New(cfg.InterfaceName, cfg.SubnetCIDR, cfg.ScanInterval, cfg.DNSServer)
 	if err != nil {
 		log.Fatalf("sniffer: %v", err)
 	}

@@ -11,6 +11,7 @@ type Agent struct {
 	InterfaceName  string
 	SubnetCIDR     string
 	ScanInterval   time.Duration
+	DNSServer      string
 	ID             string
 	ControlAddress string
 	TLS            AgentTLS
@@ -46,6 +47,7 @@ func LoadAgent(path string) (*Agent, error) {
 		InterfaceName:  v.GetString("network.interface"),
 		SubnetCIDR:     v.GetString("network.subnet_cidr"),
 		ScanInterval:   time.Duration(v.GetInt("discovery.scan_interval")) * time.Second,
+		DNSServer:      v.GetString("discovery.dns_server"),
 		ID:             v.GetString("agent.id"),
 		ControlAddress: v.GetString("agent.control_address"),
 		TLS: AgentTLS{

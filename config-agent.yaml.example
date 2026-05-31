@@ -4,6 +4,7 @@ network:
 
 discovery:
   scan_interval: 30
+  dns_server: 192.168.1.1   # router IP for direct DNS hostname lookup (optional)
 
 agent:
   id: home-agent-01

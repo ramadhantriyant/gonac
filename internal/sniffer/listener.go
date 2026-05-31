@@ -42,6 +42,6 @@ func (s *Sniffer) handlePacket(pkt gopacket.Packet) {
 	s.devicesCh <- Device{
 		MAC:      net.HardwareAddr(append([]byte(nil), arp.SourceHwAddress...)),
 		IP:       ip,
-		Hostname: resolveHostname(ip.String()),
+		Hostname: resolveHostname(ip.String(), s.dnsServer),
 	}
 }

@@ -22,10 +22,11 @@ type Sniffer struct {
 	localIP   net.IP
 	subnet    *net.IPNet
 	interval  time.Duration
+	dnsServer string
 	devicesCh chan Device
 }
 
-func New(ifaceName, cidr string, interval time.Duration) (*Sniffer, error) {
+func New(ifaceName, cidr string, interval time.Duration, dnsServer string) (*Sniffer, error) {
 	iface, err := net.InterfaceByName(ifaceName)
 	if err != nil {
 		return nil, fmt.Errorf("sniffer: interface %q: %w", ifaceName, err)
@@ -68,6 +69,7 @@ func New(ifaceName, cidr string, interval time.Duration) (*Sniffer, error) {
 		localIP:   localIP,
 		subnet:    subnet,
 		interval:  interval,
+		dnsServer: dnsServer,
 		devicesCh: make(chan Device, 64),
 	}, nil
 }

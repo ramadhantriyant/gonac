@@ -22,9 +22,22 @@ Two processes communicate over HTTPS with mutual TLS. The control plane runs two
                                                            └─────────────────────────────────────┘
 ```
 
-- **Agent** — runs on each network segment. Sends ARP requests to every IP in the subnet, captures replies, and POSTs discoveries to the agent server. Buffers up to 256 pending reports in memory and retries on failure. Requires elevated privileges for raw packet access.
+- **Agent** — runs on each network segment. Sends ARP requests to every IP in the subnet, captures replies, resolves hostnames, and POSTs discoveries to the agent server. Buffers up to 256 pending reports in memory and retries on failure. Requires elevated privileges for raw packet access.
 - **Agent server** (`:8443`) — mTLS HTTPS. Every request must carry a valid client certificate. Receives device reports and upserts them into PostgreSQL.
 - **Admin server** (`:9090`) — plain HTTP. No client certificate required. Exposes device data for management tools, dashboards, or scripts.
+
+## Hostname Resolution
+
+The agent attempts to resolve a hostname for each discovered device using four methods in order:
+
+| Priority | Method | Covers |
+|---|---|---|
+| 1 | Router DNS (`dns_server:53`) | All devices with DHCP leases — most complete source |
+| 2 | System reverse DNS | Devices registered in the system resolver |
+| 3 | mDNS unicast (port 5353) | Apple, Linux with avahi, some IoT |
+| 4 | NetBIOS NBNS (port 137) | Windows workstations |
+
+Set `discovery.dns_server` to your router's IP to enable method 1. On a home network this is typically the most effective — routers record the hostname from the DHCP `option 12` field sent by every client.
 
 ## Authentication
 
@@ -142,6 +155,7 @@ network:
 
 discovery:
   scan_interval: 30           # seconds between full subnet sweeps
+  dns_server: 192.168.1.1     # optional: router IP for direct DNS hostname lookup
 
 agent:
   id: home-agent-01           # must match the certificate CN
