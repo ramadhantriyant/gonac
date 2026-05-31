@@ -6,24 +6,27 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	"github.com/ramadhantriyant/gonac/internal/handler"
 	"github.com/ramadhantriyant/gonac/internal/store"
 )
 
 func NewRouter(s *store.Store) *echo.Echo {
 	r := echo.New()
+	r.Use(middleware.RequestLogger(), mtlsMiddleware())
 	h := handler.NewHandler(s)
 
-	r.POST("/device", h.UpsertDevice, mtlsMiddleware())
+	r.POST("/device", h.UpsertDevice)
 
 	return r
 }
 
 func NewAdminRouter(s *store.Store) *echo.Echo {
 	r := echo.New()
+	r.Use(middleware.RequestLogger())
 	h := handler.NewHandler(s)
 
-	api := r.Group("/api")
+	api := r.Group("/api", middleware.RequestID())
 	{
 		d := api.Group("/devices")
 		{
