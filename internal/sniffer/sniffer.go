@@ -78,9 +78,8 @@ func (s *Sniffer) Devices() <-chan Device {
 
 func (s *Sniffer) Run(ctx context.Context) {
 	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() { defer wg.Done(); s.scan(ctx) }()
-	go func() { defer wg.Done(); s.listen(ctx) }()
+	wg.Go(func() { s.scan(ctx) })
+	wg.Go(func() { s.listen(ctx) })
 	wg.Wait()
 	close(s.devicesCh)
 }

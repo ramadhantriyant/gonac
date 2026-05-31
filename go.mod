@@ -5,10 +5,10 @@ go 1.26.3
 require (
 	github.com/google/gopacket v1.1.19
 	github.com/google/uuid v1.6.0
-	github.com/hashicorp/mdns v1.0.6
 	github.com/hashicorp/vault-client-go v0.4.3
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/labstack/echo/v5 v5.1.1
+	github.com/miekg/dns v1.1.55
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/spf13/viper v1.21.0
 )
@@ -27,7 +27,6 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
-	github.com/miekg/dns v1.1.55 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/rogpeppe/go-internal v1.15.0 // indirect

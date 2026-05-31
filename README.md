@@ -7,7 +7,7 @@ Home network access control via active ARP scanning. Discovers devices on the lo
 Two processes communicate over HTTPS with mutual TLS. The control plane runs two independent HTTP servers:
 
 ```
-┌──────────────────────────────────┐   mTLS HTTPS :8443   ┌─────────────────────────────────────┐
+┌──────────────────────────────────┐   mTLS HTTPS :8443    ┌─────────────────────────────────────┐
 │            Agent                 │ ─── POST /device ────▶│        Agent Server (mTLS)          │
 │  (Raspberry Pi / edge device)    │                       │  RequireAndVerifyClientCert         │
 │  ARP scanner (active probes)     │                       │  Cert CN == X-Agent-ID header       │
@@ -70,8 +70,8 @@ gonac/
 │   ├── embed.go                   # Embeds schema/*.sql into the binary
 │   ├── schema/001_devices.sql     # Goose migration (Up + Down)
 │   └── queries/devices.sql        # sqlc query definitions
-├── config-agent.yaml              # Agent runtime configuration
-└── config-control.yaml            # Control plane runtime configuration
+├── config-agent.yaml.example      # Agent config template
+└── config-control.yaml.example    # Control plane config template
 ```
 
 ## Prerequisites
@@ -125,6 +125,13 @@ Distribute to each machine:
 | Agent (Raspberry Pi) | `certs/agent-<id>.crt`, `certs/agent-<id>.key`, `certs/ca.crt` |
 
 ## Configuration
+
+Copy the example files and fill in your values:
+
+```sh
+cp config-agent.yaml.example   config-agent.yaml
+cp config-control.yaml.example config-control.yaml
+```
 
 ### `config-agent.yaml`
 

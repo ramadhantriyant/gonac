@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/mdns"
+	"github.com/miekg/dns"
 )
 
 // resolveHostname tries reverse DNS first, then falls back to mDNS.
@@ -25,27 +25,32 @@ func reverseDNS(ip string) string {
 	return strings.TrimSuffix(names[0], ".")
 }
 
+// mdnsResolve sends a unicast PTR query directly to the device's mDNS port.
+// This works for most implementations (avahi, Apple mDNSResponder, Windows)
+// that respond to unicast mDNS as per RFC 6762 §5.5.
 func mdnsResolve(ip string) string {
-	target := net.ParseIP(ip).To4()
-	if target == nil {
+	arpa, err := dns.ReverseAddr(ip)
+	if err != nil {
 		return ""
 	}
 
-	entriesCh := make(chan *mdns.ServiceEntry, 32)
+	m := new(dns.Msg)
+	m.SetQuestion(arpa, dns.TypePTR)
+	m.RecursionDesired = false
 
-	params := mdns.DefaultParams("_services._dns-sd._udp")
-	params.Entries = entriesCh
-	params.Timeout = 500 * time.Millisecond
-	params.DisableIPv6 = true
+	c := &dns.Client{
+		Net:     "udp",
+		Timeout: 500 * time.Millisecond,
+	}
 
-	go func() {
-		mdns.Query(params)
-		close(entriesCh)
-	}()
+	r, _, err := c.Exchange(m, net.JoinHostPort(ip, "5353"))
+	if err != nil {
+		return ""
+	}
 
-	for entry := range entriesCh {
-		if entry.AddrV4 != nil && entry.AddrV4.Equal(target) {
-			return strings.TrimSuffix(entry.Host, ".")
+	for _, ans := range r.Answer {
+		if ptr, ok := ans.(*dns.PTR); ok {
+			return strings.TrimSuffix(ptr.Ptr, ".")
 		}
 	}
 	return ""
