@@ -25,23 +25,52 @@ func (s *Sniffer) listen(ctx context.Context) {
 }
 
 func (s *Sniffer) handlePacket(pkt gopacket.Packet) {
-	l := pkt.Layer(layers.LayerTypeARP)
-	if l == nil {
+	if l := pkt.Layer(layers.LayerTypeARP); l != nil {
+		s.handleARP(l.(*layers.ARP))
 		return
 	}
-	arp := l.(*layers.ARP)
+	if l := pkt.Layer(layers.LayerTypeDHCPv4); l != nil {
+		s.handleDHCP(l.(*layers.DHCPv4))
+	}
+}
 
+func (s *Sniffer) handleARP(arp *layers.ARP) {
 	if arp.Operation != layers.ARPReply {
 		return
 	}
-	if net.HardwareAddr(arp.SourceHwAddress).String() == s.iface.HardwareAddr.String() {
+	mac := net.HardwareAddr(append([]byte(nil), arp.SourceHwAddress...))
+	if mac.String() == s.iface.HardwareAddr.String() {
 		return
 	}
 
 	ip := net.IP(append([]byte(nil), arp.SourceProtAddress...))
+
+	var hostname string
+	if v, ok := s.dhcpNames.Load(mac.String()); ok {
+		hostname = v.(string)
+	} else {
+		hostname = resolveHostname(ip.String(), s.dnsServer)
+	}
+
 	s.devicesCh <- Device{
-		MAC:      net.HardwareAddr(append([]byte(nil), arp.SourceHwAddress...)),
+		MAC:      mac,
 		IP:       ip,
-		Hostname: resolveHostname(ip.String(), s.dnsServer),
+		Hostname: hostname,
+	}
+}
+
+func (s *Sniffer) handleDHCP(dhcp *layers.DHCPv4) {
+	if dhcp.Operation != layers.DHCPOpRequest {
+		return
+	}
+	mac := dhcp.ClientHWAddr
+	if len(mac) == 0 {
+		return
+	}
+	for _, opt := range dhcp.Options {
+		if opt.Type == layers.DHCPOptHostname && len(opt.Data) > 0 {
+			s.dhcpNames.Store(mac.String(), string(opt.Data))
+			return
+		}
 	}
 }

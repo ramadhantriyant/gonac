@@ -24,6 +24,7 @@ type Sniffer struct {
 	interval  time.Duration
 	dnsServer string
 	devicesCh chan Device
+	dhcpNames sync.Map // mac string → hostname from DHCP Option 12
 }
 
 func New(ifaceName, cidr string, interval time.Duration, dnsServer string) (*Sniffer, error) {
@@ -58,7 +59,7 @@ func New(ifaceName, cidr string, interval time.Duration, dnsServer string) (*Sni
 	if err != nil {
 		return nil, fmt.Errorf("sniffer: open pcap: %w", err)
 	}
-	if err := handle.SetBPFFilter("arp"); err != nil {
+	if err := handle.SetBPFFilter("arp or udp port 67"); err != nil {
 		handle.Close()
 		return nil, fmt.Errorf("sniffer: BPF filter: %w", err)
 	}
