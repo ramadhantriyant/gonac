@@ -10,6 +10,7 @@ type Control struct {
 	DatabaseURL   string
 	ListenAddress string
 	AdminAddress  string
+	AdminToken    string
 	TLS           ControlTLS
 }
 
@@ -36,11 +37,15 @@ func LoadControl(path string) (*Control, error) {
 	if !v.IsSet("tls.cert") || !v.IsSet("tls.key") || !v.IsSet("tls.ca") {
 		return nil, fmt.Errorf("config: tls.cert, tls.key, and tls.ca are required")
 	}
+	if !v.IsSet("admin.token") {
+		return nil, fmt.Errorf("config: admin.token is required")
+	}
 
 	return &Control{
 		DatabaseURL:   v.GetString("database_url"),
 		ListenAddress: v.GetString("control.listen_address"),
 		AdminAddress:  v.GetString("admin.listen_address"),
+		AdminToken:    v.GetString("admin.token"),
 		TLS: ControlTLS{
 			CertFile: v.GetString("tls.cert"),
 			KeyFile:  v.GetString("tls.key"),

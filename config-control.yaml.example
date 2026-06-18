@@ -5,6 +5,7 @@ control:
 
 admin:
   listen_address: :9090
+  token: change-me-to-a-long-random-value   # required — bearer token for /api, including block/unblock
 
 tls:
   cert: certs/control.crt

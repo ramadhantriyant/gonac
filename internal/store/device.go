@@ -67,3 +67,23 @@ func (s *Store) GetDeviceByMac(ctx context.Context, macAddress string) (database
 	}
 	return device, nil
 }
+
+func (s *Store) ListBlockedDevices(ctx context.Context) ([]database.Device, error) {
+	return s.querier.ListBlockedDevices(ctx)
+}
+
+func (s *Store) BlockDevice(ctx context.Context, macAddress string) (database.Device, error) {
+	device, err := s.querier.BlockDeviceByMAC(ctx, macAddress)
+	if err != nil {
+		return database.Device{}, fmt.Errorf("store: block device: %w", err)
+	}
+	return device, nil
+}
+
+func (s *Store) UnblockDevice(ctx context.Context, macAddress string) (database.Device, error) {
+	device, err := s.querier.UnblockDeviceByMAC(ctx, macAddress)
+	if err != nil {
+		return database.Device{}, fmt.Errorf("store: unblock device: %w", err)
+	}
+	return device, nil
+}

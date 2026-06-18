@@ -1,6 +1,6 @@
 # gonac
 
-Home network access control via active ARP scanning. Discovers devices on the local network and records them in PostgreSQL.
+Home network access control via active ARP scanning. Discovers devices on the local network, records them in PostgreSQL, and can optionally block unwanted devices via ARP poisoning ("enforcer mode").
 
 ## Architecture
 
@@ -8,23 +8,45 @@ Two processes communicate over HTTPS with mutual TLS. The control plane runs two
 
 ```
 ┌──────────────────────────────────┐   mTLS HTTPS :8443    ┌─────────────────────────────────────┐
-│            Agent                 │ ─── POST /device ────▶│        Agent Server (mTLS)          │
-│  (Raspberry Pi / edge device)    │                       │  RequireAndVerifyClientCert         │
-│  ARP scanner (active probes)     │                       │  Cert CN == X-Agent-ID header       │
-│  ARP listener (reply capture)    │                       │  Connection IP in cert SANs         │
-│  In-memory retry queue           │                       │  Device upsert → PostgreSQL         │
-│  No database access              │                       └─────────────────────────────────────┘
+│            Agent                 │ ─ POST /device ──────▶│        Agent Server (mTLS)          │
+│  (Raspberry Pi / edge device)    │ ◀ GET  /policy ───────│  RequireAndVerifyClientCert         │
+│  ARP scanner (active probes)     │ ─ POST /enforcement- ▶│  Cert CN == X-Agent-ID header       │
+│  ARP listener (reply capture)    │       event           │  Connection IP in cert SANs         │
+│  Enforcer (target-only ARP       │                       │  Device upsert → PostgreSQL         │
+│   poisoning of blocked devices)  │                       │  Block list lookup, audit logging   │
+│  In-memory retry queue           │                       └─────────────────────────────────────┘
+│  No database access              │
 └──────────────────────────────────┘
                                          HTTP :9090        ┌─────────────────────────────────────┐
                                     ◀─ GET /api/devices ───│        Admin Server (HTTP)          │
-                                                           │  No client cert required            │
-                                                           │  Device listing, management         │
+                                    ── PUT block/unblock ─▶│  Bearer token required (admin.token)│
+                                                           │  Device listing, management          │
                                                            └─────────────────────────────────────┘
 ```
 
-- **Agent** — runs on each network segment. Sends ARP requests to every IP in the subnet, captures replies, resolves hostnames, and POSTs discoveries to the agent server. Buffers up to 256 pending reports in memory and retries on failure. Requires elevated privileges for raw packet access.
-- **Agent server** (`:8443`) — mTLS HTTPS. Every request must carry a valid client certificate. Receives device reports and upserts them into PostgreSQL.
-- **Admin server** (`:9090`) — plain HTTP. No client certificate required. Exposes device data for management tools, dashboards, or scripts.
+- **Agent** — runs on each network segment. Sends ARP requests to every IP in the subnet, captures replies, resolves hostnames, and POSTs discoveries to the agent server. Buffers up to 256 pending reports in memory and retries on failure. Requires elevated privileges for raw packet access. When enforcer mode is enabled, it also polls the control plane for the current block list and ARP-poisons blocked devices on its own segment.
+- **Agent server** (`:8443`) — mTLS HTTPS. Every request must carry a valid client certificate. Receives device reports, serves the block list to agents, and records enforcement audit events.
+- **Admin server** (`:9090`) — plain HTTP, gated by a bearer token (`admin.token`). Exposes device data and block/unblock controls for management tools, dashboards, or scripts.
+
+## Enforcer Mode
+
+Enforcer mode blocks a device from using the network by continuously sending it spoofed ARP replies claiming the gateway's IP address now belongs to the agent's MAC address. The target sends its traffic to the agent instead of the router, and the agent drops it. Only the target's ARP cache is poisoned — the gateway's ARP table is never touched.
+
+This is **deterrence, not a hard ACL**:
+
+- It only affects IPv4 traffic on the agent's own L2 segment — it cannot reach devices behind a different VLAN or subnet.
+- Devices with a static ARP entry for the gateway, or switches running Dynamic ARP Inspection, are unaffected.
+- It does nothing for IPv6 — a dual-stack device can route around the block over IPv6/NDP entirely.
+- It is visible to anyone else capturing traffic on the segment, since the spoofed replies don't match the gateway's real MAC.
+
+Enable it per agent via `enforcer.enabled: true` and `enforcer.gateway_ip` in `config-agent.yaml`. It is **off by default** — turning it on lets that agent disconnect devices on its segment, so it should only run on networks you control.
+
+Safety behavior:
+
+- The agent never targets itself or the configured gateway IP, and ignores any policy entry outside its own `subnet_cidr`.
+- A capped number of devices (`enforcer.max_targets`) can be blocked concurrently per agent.
+- When a block is lifted, the agent sends one corrective ("healing") ARP reply restoring the gateway's real MAC before stopping. The same healing happens on shutdown (SIGTERM) so no device is left poisoned when the agent process exits.
+- If the agent can't reach the control plane for several consecutive policy polls, it fails open — every active block is released rather than risk a permanent lockout caused by a control-plane outage.
 
 ## Hostname Resolution
 
@@ -76,13 +98,15 @@ gonac/
 │   ├── agent/client.go            # mTLS HTTP client + retry queue
 │   ├── control/server.go          # HTTPS server (mTLS, http.Server)
 │   ├── handler/                   # Echo HTTP handlers
-│   ├── router/router.go           # Echo router + mTLS middleware
-│   ├── sniffer/                   # ARP scanner + listener (gopacket/pcap)
+│   ├── router/router.go           # Echo router + mTLS middleware + admin auth
+│   ├── sniffer/                   # ARP scanner, listener, enforcer (gopacket/pcap)
 │   └── store/                     # PostgreSQL persistence (pgx + sqlc)
 ├── db/
 │   ├── embed.go                   # Embeds schema/*.sql into the binary
 │   ├── schema/001_devices.sql     # Goose migration (Up + Down)
-│   └── queries/devices.sql        # sqlc query definitions
+│   ├── schema/002_enforcement.sql # Adds is_blocked/blocked_at + enforcement_events
+│   ├── queries/devices.sql        # sqlc query definitions
+│   └── queries/enforcement_events.sql
 ├── config-agent.yaml.example      # Agent config template
 └── config-control.yaml.example    # Control plane config template
 ```
@@ -161,6 +185,13 @@ agent:
   id: home-agent-01           # must match the certificate CN
   control_address: https://192.168.1.1:8443
 
+enforcer:
+  enabled: false              # set true to let this agent block devices via ARP poisoning
+  gateway_ip: 192.168.1.1     # required when enabled — router this agent impersonates
+  poison_interval: 2          # seconds between spoofed ARP replies per blocked device
+  policy_poll_interval: 10    # seconds between block-list fetches from the control plane
+  max_targets: 64             # safety cap on concurrently blocked devices
+
 tls:
   cert: certs/agent-home-agent-01.crt
   key: certs/agent-home-agent-01.key
@@ -177,6 +208,7 @@ control:
 
 admin:
   listen_address: :9090   # admin server (plain HTTP)
+  token: change-me         # required — bearer token for all /api requests
 
 tls:
   cert: certs/control.crt
@@ -213,11 +245,21 @@ CREATE TABLE devices (
     hostname    TEXT,
     first_seen  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_seen   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    is_known    BOOLEAN     NOT NULL DEFAULT FALSE
+    is_known    BOOLEAN     NOT NULL DEFAULT FALSE,
+    is_blocked  BOOLEAN     NOT NULL DEFAULT FALSE,
+    blocked_at  TIMESTAMPTZ
+);
+
+CREATE TABLE enforcement_events (
+    id          UUID        PRIMARY KEY,
+    device_id   UUID        NOT NULL REFERENCES devices(id),
+    agent_id    TEXT        NOT NULL,
+    action      TEXT        NOT NULL,  -- block_started | block_stopped
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
-Devices are keyed by MAC address. IP address is updated on each discovery — DHCP reassignments are handled automatically. `is_known` is never overwritten by discovery, so trusted devices stay trusted.
+Devices are keyed by MAC address. IP address is updated on each discovery — DHCP reassignments are handled automatically. `is_known` and `is_blocked` are never overwritten by discovery, so trusted and blocked status both persist across rescans. `enforcement_events` is the audit trail of enforcement actions agents actually took, reported back asynchronously.
 
 ## HTTP API
 
@@ -226,8 +268,10 @@ Devices are keyed by MAC address. IP address is updated on each discovery — DH
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/device` | Report a discovered device |
+| `GET` | `/policy` | Fetch the current block list (all blocked devices, control plane does not track per-agent subnets) |
+| `POST` | `/enforcement-event` | Report a block/heal action for audit logging |
 
-Request body:
+Request body for `POST /device`:
 ```json
 {
   "mac_address": "aa:bb:cc:dd:ee:ff",
@@ -238,20 +282,48 @@ Request body:
 
 `hostname` is optional — omitted when the agent cannot resolve one.
 
-### Admin server — `:9090` (plain HTTP)
+`GET /policy` response:
+```json
+{
+  "blocked": [
+    { "mac_address": "aa:bb:cc:dd:ee:ff", "ip_address": "192.168.1.42" }
+  ]
+}
+```
+
+Request body for `POST /enforcement-event`:
+```json
+{ "mac_address": "aa:bb:cc:dd:ee:ff", "action": "block_started" }
+```
+
+### Admin server — `:9090` (plain HTTP, bearer token required)
+
+Every request needs `Authorization: Bearer <admin.token>`.
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/devices` | List all discovered devices |
+| `GET` | `/api/devices/blocked` | List currently blocked devices |
 | `GET` | `/api/devices/id/:id` | Get device by UUID |
 | `GET` | `/api/devices/mac/:mac` | Get device by MAC address |
 | `PUT` | `/api/devices/id/:id/known` | Mark device as trusted by UUID |
 | `PUT` | `/api/devices/mac/:mac/known` | Mark device as trusted by MAC address |
+| `PUT` | `/api/devices/mac/:mac/blocked` | Block a device by MAC address |
+| `DELETE` | `/api/devices/mac/:mac/blocked` | Unblock a device by MAC address |
 
 Example — mark a device as trusted:
 ```sh
-curl -X PUT http://localhost:9090/api/devices/mac/aa:bb:cc:dd:ee:ff/known
+curl -X PUT http://localhost:9090/api/devices/mac/aa:bb:cc:dd:ee:ff/known \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
+
+Example — block a device (requires enforcer mode enabled on the agent covering its subnet):
+```sh
+curl -X PUT http://localhost:9090/api/devices/mac/aa:bb:cc:dd:ee:ff/blocked \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+> **Known limitation:** the bundled `ui/` dashboard does not yet send an `Authorization` header with its requests, so it will receive `401` responses once `admin.token` is set. The dashboard has no token-entry UI today; until that's added, use the `curl` examples above or update the dashboard's `fetch()` calls in `ui/src/api/devices.ts` to attach the bearer token.
 
 ## Privilege Note
 

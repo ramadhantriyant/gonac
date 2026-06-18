@@ -119,3 +119,66 @@ func (c *Client) post(ctx context.Context, p payload) error {
 	}
 	return nil
 }
+
+// PolicyTarget is a single blocked device as reported by the control plane.
+type PolicyTarget struct {
+	MacAddress string `json:"mac_address"`
+	IPAddress  string `json:"ip_address"`
+}
+
+type policyResponse struct {
+	Blocked []PolicyTarget `json:"blocked"`
+}
+
+// FetchPolicy retrieves the current set of blocked devices from the
+// control plane. Used by enforcer mode to decide what to poison.
+func (c *Client) FetchPolicy(ctx context.Context) ([]PolicyTarget, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/policy", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-Agent-ID", c.agentID)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("unexpected status %d", resp.StatusCode)
+	}
+
+	var p policyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+		return nil, err
+	}
+	return p.Blocked, nil
+}
+
+// ReportEnforcementEvent posts a single block/heal event for audit logging
+// on the control plane. Best-effort: failures are logged and dropped, the
+// event is never retried or requeued.
+func (c *Client) ReportEnforcementEvent(ctx context.Context, mac, action string) {
+	body, err := json.Marshal(struct {
+		MacAddress string `json:"mac_address"`
+		Action     string `json:"action"`
+	}{MacAddress: mac, Action: action})
+	if err != nil {
+		return
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/enforcement-event", bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Agent-ID", c.agentID)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		log.Printf("agent: enforcement event report failed: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+}

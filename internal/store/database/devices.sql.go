@@ -11,8 +11,32 @@ import (
 	"github.com/google/uuid"
 )
 
+const blockDeviceByMAC = `-- name: BlockDeviceByMAC :one
+UPDATE devices
+SET is_blocked = TRUE, blocked_at = NOW()
+WHERE mac_address = $1
+RETURNING id, mac_address, ip_address, hostname, first_seen, last_seen, is_known, is_blocked, blocked_at
+`
+
+func (q *Queries) BlockDeviceByMAC(ctx context.Context, macAddress string) (Device, error) {
+	row := q.db.QueryRow(ctx, blockDeviceByMAC, macAddress)
+	var i Device
+	err := row.Scan(
+		&i.ID,
+		&i.MacAddress,
+		&i.IpAddress,
+		&i.Hostname,
+		&i.FirstSeen,
+		&i.LastSeen,
+		&i.IsKnown,
+		&i.IsBlocked,
+		&i.BlockedAt,
+	)
+	return i, err
+}
+
 const getDeviceByID = `-- name: GetDeviceByID :one
-SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
+SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known, is_blocked, blocked_at
 FROM devices
 WHERE id = $1
 `
@@ -28,12 +52,14 @@ func (q *Queries) GetDeviceByID(ctx context.Context, id uuid.UUID) (Device, erro
 		&i.FirstSeen,
 		&i.LastSeen,
 		&i.IsKnown,
+		&i.IsBlocked,
+		&i.BlockedAt,
 	)
 	return i, err
 }
 
 const getDeviceByMAC = `-- name: GetDeviceByMAC :one
-SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
+SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known, is_blocked, blocked_at
 FROM devices
 WHERE mac_address = $1
 `
@@ -49,12 +75,51 @@ func (q *Queries) GetDeviceByMAC(ctx context.Context, macAddress string) (Device
 		&i.FirstSeen,
 		&i.LastSeen,
 		&i.IsKnown,
+		&i.IsBlocked,
+		&i.BlockedAt,
 	)
 	return i, err
 }
 
+const listBlockedDevices = `-- name: ListBlockedDevices :many
+SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known, is_blocked, blocked_at
+FROM devices
+WHERE is_blocked = TRUE
+ORDER BY blocked_at DESC
+`
+
+func (q *Queries) ListBlockedDevices(ctx context.Context) ([]Device, error) {
+	rows, err := q.db.Query(ctx, listBlockedDevices)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Device{}
+	for rows.Next() {
+		var i Device
+		if err := rows.Scan(
+			&i.ID,
+			&i.MacAddress,
+			&i.IpAddress,
+			&i.Hostname,
+			&i.FirstSeen,
+			&i.LastSeen,
+			&i.IsKnown,
+			&i.IsBlocked,
+			&i.BlockedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDevices = `-- name: ListDevices :many
-SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
+SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known, is_blocked, blocked_at
 FROM devices
 ORDER BY last_seen DESC
 `
@@ -76,6 +141,8 @@ func (q *Queries) ListDevices(ctx context.Context) ([]Device, error) {
 			&i.FirstSeen,
 			&i.LastSeen,
 			&i.IsKnown,
+			&i.IsBlocked,
+			&i.BlockedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -88,7 +155,7 @@ func (q *Queries) ListDevices(ctx context.Context) ([]Device, error) {
 }
 
 const listUnknownDevices = `-- name: ListUnknownDevices :many
-SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
+SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known, is_blocked, blocked_at
 FROM devices
 WHERE is_known = FALSE
 ORDER BY last_seen DESC
@@ -111,6 +178,8 @@ func (q *Queries) ListUnknownDevices(ctx context.Context) ([]Device, error) {
 			&i.FirstSeen,
 			&i.LastSeen,
 			&i.IsKnown,
+			&i.IsBlocked,
+			&i.BlockedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -126,7 +195,7 @@ const markDeviceKnown = `-- name: MarkDeviceKnown :one
 UPDATE devices
 SET is_known = TRUE
 WHERE mac_address = $1
-RETURNING id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
+RETURNING id, mac_address, ip_address, hostname, first_seen, last_seen, is_known, is_blocked, blocked_at
 `
 
 func (q *Queries) MarkDeviceKnown(ctx context.Context, macAddress string) (Device, error) {
@@ -140,6 +209,32 @@ func (q *Queries) MarkDeviceKnown(ctx context.Context, macAddress string) (Devic
 		&i.FirstSeen,
 		&i.LastSeen,
 		&i.IsKnown,
+		&i.IsBlocked,
+		&i.BlockedAt,
+	)
+	return i, err
+}
+
+const unblockDeviceByMAC = `-- name: UnblockDeviceByMAC :one
+UPDATE devices
+SET is_blocked = FALSE, blocked_at = NULL
+WHERE mac_address = $1
+RETURNING id, mac_address, ip_address, hostname, first_seen, last_seen, is_known, is_blocked, blocked_at
+`
+
+func (q *Queries) UnblockDeviceByMAC(ctx context.Context, macAddress string) (Device, error) {
+	row := q.db.QueryRow(ctx, unblockDeviceByMAC, macAddress)
+	var i Device
+	err := row.Scan(
+		&i.ID,
+		&i.MacAddress,
+		&i.IpAddress,
+		&i.Hostname,
+		&i.FirstSeen,
+		&i.LastSeen,
+		&i.IsKnown,
+		&i.IsBlocked,
+		&i.BlockedAt,
 	)
 	return i, err
 }
@@ -152,7 +247,7 @@ DO UPDATE SET
     ip_address = EXCLUDED.ip_address,
     hostname   = COALESCE(EXCLUDED.hostname, devices.hostname),
     last_seen  = NOW()
-RETURNING id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
+RETURNING id, mac_address, ip_address, hostname, first_seen, last_seen, is_known, is_blocked, blocked_at
 `
 
 type UpsertDeviceParams struct {
@@ -178,6 +273,8 @@ func (q *Queries) UpsertDevice(ctx context.Context, arg UpsertDeviceParams) (Dev
 		&i.FirstSeen,
 		&i.LastSeen,
 		&i.IsKnown,
+		&i.IsBlocked,
+		&i.BlockedAt,
 	)
 	return i, err
 }

@@ -11,11 +11,15 @@ import (
 )
 
 type Querier interface {
+	BlockDeviceByMAC(ctx context.Context, macAddress string) (Device, error)
+	CreateEnforcementEvent(ctx context.Context, arg CreateEnforcementEventParams) (EnforcementEvent, error)
 	GetDeviceByID(ctx context.Context, id uuid.UUID) (Device, error)
 	GetDeviceByMAC(ctx context.Context, macAddress string) (Device, error)
+	ListBlockedDevices(ctx context.Context) ([]Device, error)
 	ListDevices(ctx context.Context) ([]Device, error)
 	ListUnknownDevices(ctx context.Context) ([]Device, error)
 	MarkDeviceKnown(ctx context.Context, macAddress string) (Device, error)
+	UnblockDeviceByMAC(ctx context.Context, macAddress string) (Device, error)
 	UpsertDevice(ctx context.Context, arg UpsertDeviceParams) (Device, error)
 }
 

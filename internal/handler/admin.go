@@ -58,3 +58,29 @@ func (h *handler) MarkAsKnownByMAC(c *echo.Context) error {
 
 	return c.JSON(http.StatusOK, device)
 }
+
+func (h *handler) ListBlockedDevices(c *echo.Context) error {
+	devices, err := h.st.ListBlockedDevices(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, internalServerError)
+	}
+	return c.JSON(http.StatusOK, devices)
+}
+
+func (h *handler) BlockDeviceByMAC(c *echo.Context) error {
+	mac := c.Param("mac")
+	device, err := h.st.BlockDevice(c.Request().Context(), mac)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, internalServerError)
+	}
+	return c.JSON(http.StatusOK, device)
+}
+
+func (h *handler) UnblockDeviceByMAC(c *echo.Context) error {
+	mac := c.Param("mac")
+	device, err := h.st.UnblockDevice(c.Request().Context(), mac)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, internalServerError)
+	}
+	return c.JSON(http.StatusOK, device)
+}

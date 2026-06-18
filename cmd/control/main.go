@@ -45,7 +45,7 @@ func main() {
 	// Admin server: plain HTTP on cfg.AdminAddress
 	adminSrv := &http.Server{
 		Addr:    cfg.AdminAddress,
-		Handler: router.NewAdminRouter(st),
+		Handler: router.NewAdminRouter(st, cfg.AdminToken),
 	}
 
 	go func() {

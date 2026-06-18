@@ -1,6 +1,7 @@
 package router
 
 import (
+	"crypto/subtle"
 	"crypto/x509"
 	"io/fs"
 	"log"
@@ -21,25 +22,31 @@ func NewRouter(s *store.Store) *echo.Echo {
 	h := handler.NewHandler(s)
 
 	r.POST("/device", h.UpsertDevice)
+	r.GET("/policy", h.GetPolicy)
+	r.POST("/enforcement-event", h.PostEnforcementEvent)
 
 	return r
 }
 
-func NewAdminRouter(s *store.Store) *echo.Echo {
+func NewAdminRouter(s *store.Store, adminToken string) *echo.Echo {
 	r := echo.New()
 	r.Use(middleware.RequestLogger())
 	h := handler.NewHandler(s)
 
-	api := r.Group("/api", middleware.RequestID())
+	api := r.Group("/api", middleware.RequestID(), adminAuthMiddleware(adminToken))
 	{
 		d := api.Group("/devices")
 		{
 			d.GET("", h.ListDevices)
+			d.GET("/blocked", h.ListBlockedDevices)
 			d.GET("/id/:id", h.GetDeviceByID)
 			d.GET("/mac/:mac", h.GetDeviceByMAC)
 
 			d.PUT("/id/:id/known", h.MarkAsKnown)
 			d.PUT("/mac/:mac/known", h.MarkAsKnownByMAC)
+
+			d.PUT("/mac/:mac/blocked", h.BlockDeviceByMAC)
+			d.DELETE("/mac/:mac/blocked", h.UnblockDeviceByMAC)
 		}
 	}
 
@@ -51,6 +58,28 @@ func NewAdminRouter(s *store.Store) *echo.Echo {
 	r.GET("/", spaHandler(sub))
 
 	return r
+}
+
+// adminAuthMiddleware requires a bearer token on every /api request. The
+// admin server now exposes destructive actions (blocking a device knocks
+// it off the network), so it can no longer stay anonymous like a
+// read-only dashboard.
+func adminAuthMiddleware(token string) echo.MiddlewareFunc {
+	tokenBytes := []byte(token)
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			const prefix = "Bearer "
+			auth := c.Request().Header.Get("Authorization")
+			if !strings.HasPrefix(auth, prefix) {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "unauthorized"})
+			}
+			supplied := []byte(strings.TrimPrefix(auth, prefix))
+			if len(supplied) != len(tokenBytes) || subtle.ConstantTimeCompare(supplied, tokenBytes) != 1 {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "unauthorized"})
+			}
+			return next(c)
+		}
+	}
 }
 
 func spaHandler(fsys fs.FS) echo.HandlerFunc {

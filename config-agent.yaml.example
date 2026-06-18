@@ -10,6 +10,17 @@ agent:
   id: home-agent-01
   control_address: https://192.168.1.1:8443
 
+# Enforcer mode: blocks devices on this agent's segment via target-only ARP
+# poisoning. Disabled by default — this is materially more invasive than
+# passive discovery and must be turned on deliberately, on a network you
+# control.
+enforcer:
+  enabled: false
+  gateway_ip: 192.168.1.1   # required when enabled — the router this agent impersonates to blocked devices
+  poison_interval: 2        # seconds between spoofed ARP replies sent to each blocked device
+  policy_poll_interval: 10  # seconds between block-list fetches from the control plane
+  max_targets: 64           # safety cap on concurrently blocked devices per agent
+
 tls:
   cert: certs/agent-home-agent-01.crt
   key: certs/agent-home-agent-01.key

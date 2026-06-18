@@ -8,14 +8,25 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Device struct {
-	ID         uuid.UUID `json:"id"`
-	MacAddress string    `json:"mac_address"`
-	IpAddress  string    `json:"ip_address"`
-	Hostname   *string   `json:"hostname"`
-	FirstSeen  time.Time `json:"first_seen"`
-	LastSeen   time.Time `json:"last_seen"`
-	IsKnown    bool      `json:"is_known"`
+	ID         uuid.UUID          `json:"id"`
+	MacAddress string             `json:"mac_address"`
+	IpAddress  string             `json:"ip_address"`
+	Hostname   *string            `json:"hostname"`
+	FirstSeen  time.Time          `json:"first_seen"`
+	LastSeen   time.Time          `json:"last_seen"`
+	IsKnown    bool               `json:"is_known"`
+	IsBlocked  bool               `json:"is_blocked"`
+	BlockedAt  pgtype.Timestamptz `json:"blocked_at"`
+}
+
+type EnforcementEvent struct {
+	ID        uuid.UUID `json:"id"`
+	DeviceID  uuid.UUID `json:"device_id"`
+	AgentID   string    `json:"agent_id"`
+	Action    string    `json:"action"`
+	CreatedAt time.Time `json:"created_at"`
 }

@@ -9,28 +9,46 @@ DO UPDATE SET
 RETURNING *;
 
 -- name: ListDevices :many
-SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
+SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known, is_blocked, blocked_at
 FROM devices
 ORDER BY last_seen DESC;
 
 -- name: ListUnknownDevices :many
-SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
+SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known, is_blocked, blocked_at
 FROM devices
 WHERE is_known = FALSE
 ORDER BY last_seen DESC;
 
+-- name: ListBlockedDevices :many
+SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known, is_blocked, blocked_at
+FROM devices
+WHERE is_blocked = TRUE
+ORDER BY blocked_at DESC;
+
 -- name: GetDeviceByMAC :one
-SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
+SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known, is_blocked, blocked_at
 FROM devices
 WHERE mac_address = $1;
 
 -- name: GetDeviceByID :one
-SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known
+SELECT id, mac_address, ip_address, hostname, first_seen, last_seen, is_known, is_blocked, blocked_at
 FROM devices
 WHERE id = $1;
 
 -- name: MarkDeviceKnown :one
 UPDATE devices
 SET is_known = TRUE
+WHERE mac_address = $1
+RETURNING *;
+
+-- name: BlockDeviceByMAC :one
+UPDATE devices
+SET is_blocked = TRUE, blocked_at = NOW()
+WHERE mac_address = $1
+RETURNING *;
+
+-- name: UnblockDeviceByMAC :one
+UPDATE devices
+SET is_blocked = FALSE, blocked_at = NULL
 WHERE mac_address = $1
 RETURNING *;
