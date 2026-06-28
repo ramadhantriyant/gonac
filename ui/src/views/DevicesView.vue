@@ -13,6 +13,19 @@ const search = ref('')
 const marking = ref(new Set<string>())
 const lastUpdated = ref<Date | null>(null)
 
+type SortKey = 'status' | 'hostname' | 'ip_address' | 'mac_address' | 'last_seen' | 'first_seen'
+const sortKey = ref<SortKey>('last_seen')
+const sortAsc = ref(false)
+
+function sortBy(key: SortKey) {
+  if (sortKey.value === key) {
+    sortAsc.value = !sortAsc.value
+  } else {
+    sortKey.value = key
+    sortAsc.value = true
+  }
+}
+
 const counts = computed(() => ({
   all: devices.value.length,
   unknown: devices.value.filter((d) => !d.is_known).length,
@@ -24,14 +37,60 @@ const filtered = computed(() => {
   if (filter.value === 'unknown') list = list.filter((d) => !d.is_known)
   if (filter.value === 'known') list = list.filter((d) => d.is_known)
   const q = search.value.trim().toLowerCase()
-  if (!q) return list
-  return list.filter(
-    (d) =>
-      d.mac_address.toLowerCase().includes(q) ||
-      d.ip_address.includes(q) ||
-      (d.hostname ?? '').toLowerCase().includes(q),
-  )
+  if (q) {
+    list = list.filter(
+      (d) =>
+        d.mac_address.toLowerCase().includes(q) ||
+        d.ip_address.includes(q) ||
+        (d.hostname ?? '').toLowerCase().includes(q),
+    )
+  }
+
+  const key = sortKey.value
+  const dir = sortAsc.value ? 1 : -1
+  return [...list].sort((a, b) => {
+    let av: string | number
+    let bv: string | number
+    switch (key) {
+      case 'status':
+        av = a.is_known ? 1 : 0
+        bv = b.is_known ? 1 : 0
+        break
+      case 'hostname':
+        av = (a.hostname ?? '').toLowerCase()
+        bv = (b.hostname ?? '').toLowerCase()
+        break
+      case 'ip_address':
+        av = ipToNumber(a.ip_address)
+        bv = ipToNumber(b.ip_address)
+        break
+      case 'mac_address':
+        av = a.mac_address.toLowerCase()
+        bv = b.mac_address.toLowerCase()
+        break
+      case 'last_seen':
+        av = new Date(a.last_seen).getTime()
+        bv = new Date(b.last_seen).getTime()
+        break
+      case 'first_seen':
+        av = new Date(a.first_seen).getTime()
+        bv = new Date(b.first_seen).getTime()
+        break
+    }
+    if (av < bv) return -1 * dir
+    if (av > bv) return 1 * dir
+    return 0
+  })
 })
+
+function ipToNumber(ip: string): number {
+  return ip.split('.').reduce((acc, part) => acc * 256 + (parseInt(part, 10) || 0), 0)
+}
+
+function sortArrow(key: SortKey): string {
+  if (sortKey.value !== key) return ''
+  return sortAsc.value ? ' ▲' : ' ▼'
+}
 
 async function load() {
   loading.value = true
@@ -144,12 +203,24 @@ onUnmounted(() => clearInterval(timer))
         <table class="table">
           <thead>
             <tr>
-              <th>Status</th>
-              <th>Hostname</th>
-              <th>IP Address</th>
-              <th>MAC Address</th>
-              <th>Last Seen</th>
-              <th>First Seen</th>
+              <th class="sortable" @click="sortBy('status')">
+                Status<span class="sort-arrow">{{ sortArrow('status') }}</span>
+              </th>
+              <th class="sortable" @click="sortBy('hostname')">
+                Hostname<span class="sort-arrow">{{ sortArrow('hostname') }}</span>
+              </th>
+              <th class="sortable" @click="sortBy('ip_address')">
+                IP Address<span class="sort-arrow">{{ sortArrow('ip_address') }}</span>
+              </th>
+              <th class="sortable" @click="sortBy('mac_address')">
+                MAC Address<span class="sort-arrow">{{ sortArrow('mac_address') }}</span>
+              </th>
+              <th class="sortable" @click="sortBy('last_seen')">
+                Last Seen<span class="sort-arrow">{{ sortArrow('last_seen') }}</span>
+              </th>
+              <th class="sortable" @click="sortBy('first_seen')">
+                First Seen<span class="sort-arrow">{{ sortArrow('first_seen') }}</span>
+              </th>
               <th></th>
             </tr>
           </thead>
@@ -436,6 +507,19 @@ onUnmounted(() => clearInterval(timer))
   letter-spacing: 0.05em;
   color: #64748b;
   border-bottom: 1px solid #e2e8f0;
+}
+
+.table thead th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.table thead th.sortable:hover {
+  color: #1e293b;
+}
+
+.sort-arrow {
+  font-size: 0.65rem;
 }
 
 .table tbody tr {

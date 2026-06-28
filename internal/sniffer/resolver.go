@@ -156,7 +156,7 @@ func parseNBNSResponse(buf []byte) string {
 	numNames := int(buf[56])
 	offset := 57
 
-	for i := 0; i < numNames; i++ {
+	for range numNames {
 		if offset+18 > len(buf) {
 			break
 		}
